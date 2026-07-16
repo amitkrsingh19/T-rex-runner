@@ -1,0 +1,11 @@
+[project]
+name = "t-rex-runner"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "gym>=0.26.2",
+    "opencv-python>=5.0.0.93",
+    "tensorflow>=2.21.0",
+]

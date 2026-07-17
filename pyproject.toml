@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "gym>=0.26.2",
+    "mss>=10.2.0",
     "opencv-python>=5.0.0.93",
+    "pyautogui>=0.9.54",
+    "pydirectinput>=1.0.4",
+    "selenium>=4.46.0",
     "tensorflow>=2.21.0",
 ]

@@ -1,6 +1,20 @@
 {
-    "left": 549,
-    "top": 311,
-    "width": 717,
-    "height": 198
+    "game_location": {
+        "left": 0,
+        "top": 300,
+        "width": 600,
+        "height": 500
+    },
+    "finish_location": {
+        "left": 650,
+        "top": 480,
+        "width": 660,
+        "height": 70
+    },
+    "score_location": {
+        "left": 1700, 
+        "top": 380, 
+        "width": 200, 
+        "height": 50
+    }
 }

@@ -1,103 +1,238 @@
 import time
+import json 
+
 import cv2
 import numpy as np
-import mss
+from mss import MSS
 import pydirectinput
 import pyautogui
+import pytesseract
 
 from selenium import webdriver
+from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
 
+import gymnasium as gym
+from gymnasium.spaces import Box, Discrete
 
-# Browser Setup
-options = Options()
-options.add_experimental_option("detach", True)
+## game control class - launch and send commands to the game
+class GameControl:
+    def __init__(self):
+        self.driver = self._launch_browser()
 
-driver = webdriver.Chrome(options=options)
+    ## launch chrome browser and return driver
+    def _launch_browser(self):
+        options = Options()
+        ## start with full screen
+        options.add_argument("--start-maximized")
+        ## then detach the window
+        options.add_experimental_option("detach", True)
+        ## forcefully disable darkmode
+        options.add_argument("--disable-features=DarkMode")
+        ## chrome webdriver 
+        driver = webdriver.Chrome(options = options)
+        time.sleep(2)
+        return driver
+    
+    ## open dino game using search bar
+    def open_dino_game(self):
+        pyautogui.hotkey("fn", "f6")
+        time.sleep(0.3)
+        pyautogui.typewrite("chrome://dino", interval = 0.05)
+        pyautogui.press('enter')
+        time.sleep(2)
 
+    ## confirm the game has loaded correctly
+    def wait_for_game_ready(self):
+        print("Waiting for Dino game canvas to appear...")
+        while True:
+            try:
+                canvas = self.driver.find_element(By.CLASS_NAME, "runner-canvas")
+                if canvas.is_displayed():
+                    print("Game is ready.")
+                    break
+            except:
+                pass
 
-def setup_game():
+    ## start game at once    
+    def start_game(self):
+        print("Starting game...")
 
-    driver.get("https://chromedino.com/dina/")
-    driver.maximize_window()
+        self.open_dino_game()
+        self.wait_for_game_ready()
 
-    time.sleep(2)
+        pydirectinput.press('space')
+        time.sleep(1)
+         
+## Create a Enviroment for dino game by extenfing env Class
+class DinoEnv(gym.Env):
+    """Gymnasium environment for Chrome Dino game."""
 
-    screen_w, screen_h = pyautogui.size()
+    ACTIONS = {0: "noop", 1: "jump", 2: "duck"}
+    
+    def __init__(self):
+        ## call super to get access to all the available methods of Env Class
+        super().__init__()
 
-    pyautogui.click(screen_w // 2, screen_h // 2)
+        ## create observation_space - game enviroment box
+        self.observation_space = Box(low=0, high=255, shape=(1,83,100), dtype=np.uint8)
+        ## create action space of all actions that can be executed in enviroment
+        self.action_space = Discrete(3) ## actions - (jump, duck, do-nothing)
 
-    time.sleep(0.5)
+        config = self.load_config()
 
-    pydirectinput.press("space")
+        self.game_location = config["game_location"]
+        self.finish_location = config["finish_location"]
+        self.score_location = config['score_location']
 
+        print("Enviroment Created...")
 
-"""def get_monitor():
+    def _capture(self, region: dict) -> np.ndarray:
+        """Capture a screen region and return grayscale image."""
+        with MSS() as sct:
+            frame = np.array(sct.grab(region))[:, :, :3]
 
-    # Capture whole monitor once
-    with mss.MSS() as sct:
+        return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    ## load all the config at once
+    def load_config(self):
+        with open("config.json", "r") as f:
+            config = json.load(f)
 
-        img = np.array(sct.grab(sct.monitors[1]))
+            print("config.json loaded for game-frame info")
+            return config
+        
+    ## get the screen which lies inside game region
+    def get_observation(self):
+        gray = self._capture(self.game_location)
 
-        cv2.imshow("Select ROI", img)
+        # Resize
+        resized = cv2.resize(gray, (100, 83))
 
-        # Select the game area manually ONCE
-        x, y, w, h = cv2.selectROI("Select ROI", img)
+        # Add channel dimension
+        observation = resized[np.newaxis, :, :]
+        
+        return observation
+    
+    ## model will take a step on an action taken 
+    def step(self, action):
+        match action:
+            case 1:
+                pydirectinput.press('space')
 
-        print(x,y,w,h)
+            case 2:
+                pydirectinput.keyDown("down")
+                time.sleep(0.05)
+                pydirectinput.keyUp("down")
+        
+        terminated = self.is_done()
+        obs = self.get_observation()
+        reward = -10 if terminated else 1
+
+        truncated = False
+
+        info = {}
+
+        ## if the game ended get score, write in info
+        if terminated:
+            info['score'] = self.get_episode_score()
+
+        return obs, reward, terminated, False, info
+    
+    ## check for game over
+    def is_done(self) -> bool:
+        """checking for a game over on display using pytesseract text analysis"""
+        ## capture screen sub-region
+        screen = self._capture(self.finish_location)
+
+        # Preprocess for OCR: Apply adaptive thresholding to convert to binary black & white
+        processed = cv2.threshold(screen, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+        
+        # Setup Tesseract Config 
+        custom_config = r'--psm 7'
+        text = pytesseract.image_to_string(processed, config=custom_config).strip().upper()
+
+        # Debug  
+        #print(f"Detected Finish Region Text: '{text}'")
+
+        # Fallback check
+        if "GAME" in text or "OVER" in text:
+            print("Game-Over!")
+            return True # true if game is done
+        
+        return False # game not done
+    
+    ## restart enviroment from start
+    def reset(self, seed=None, options=None): #type: ignore
+        super().reset(seed=seed)
+        ## restart the game
+        pydirectinput.press("space")
+        time.sleep(0.5)
+
+        obs = self.get_observation()
+        info = {}
+        return obs, info
+    
+    # visualize the game
+    def render(self):
+        obs_frame = self.get_observation()[0]
+
+        large_view = cv2.resize(obs_frame[0], (600, 498), interpolation=cv2.INTER_NEAREST)
+
+        cv2.imshow("Game", large_view)
+        cv2.waitKey(1)
+
+    def close(self):
         cv2.destroyAllWindows()
 
-    return {
-        "left": int(x),
-        "top": int(y),
-        "width": int(w),
-        "height": int(h),
-    }
-"""
+    ## get each episodes score for logging 
+    def get_episode_score(self):
+        """Scrapes the high score digits directly from the canvas area"""
+        screen = self._capture(self.score_location)
 
-def load_monitor():
-    import json
-    with open("config.json", "r") as f:
-        monitor = json.load(f)
-        return monitor
+        # Preprocess digits: Invert colors to guarantee black digits on pure white paper space
+        processed = cv2.threshold(screen, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+        # Setup Tesseract Digit Config
+        custom_config = r'--psm 7 outputbase digits'
+        raw_text = pytesseract.image_to_string(processed, config=custom_config).strip()
+
+        # Extract only numeric digits to filter out random punctuation artifacts
+        score_digits = "".join([char for char in raw_text if char.isdigit()])
+        
+        if score_digits:
+            return int(score_digits)
+        return 0
+        
 
 def main():
 
-    setup_game()
+    game = GameControl()
+    game.start_game()
+    
+    env = DinoEnv()
 
-    monitor = load_monitor()
+    obs, info = env.reset()
+    
+    frame_count = 0
 
-    print(monitor)
+    for episode in range(5):
+        print(f"--- Starting Testing Episode {episode + 1} ---")
+        obs, info = env.reset()
+        done = False
 
-    with mss.MSS() as sct:
+        while not done:
+            env.render()
 
-        last = time.time()
-        frame_count = 0
-        while True:
+            action = env.action_space.sample() 
 
-            frame = np.array(sct.grab(monitor))
+            obs, reward, terminated, truncated, info = env.step(action)
 
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGRA2GRAY)
+            done = terminated or truncated
 
-            
-            gray = cv2.resize(gray, (84, 84))
-
-            cv2.imshow("Dino", gray)
-            if frame_count % 50 == 0 and frame_count <= 400:
-                cv2.imwrite(f"frame_{frame_count}.jpg",gray)
-                
-
-            frame_count += 1
-            fps = 1 / (time.time() - last)
-            last = time.time()
-
-            print(f"FPS : {fps:.2f}")
-
-            if cv2.waitKey(1) == ord("q"):
-                break
-
-        cv2.destroyAllWindows()
-
-
+            if done:
+                print(f"Finished Episode! Performance Metrics Data: {info}")
+    
+    env.close()
 if __name__ == "__main__":
     main()

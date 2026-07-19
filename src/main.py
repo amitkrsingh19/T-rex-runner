@@ -84,12 +84,13 @@ class DinoEnv(gym.Env):
 
         self.frames = deque(maxlen= 4) ## 4 frames at a time
         self.sct = MSS()
-        config = self.load_config()
 
+        config = self.load_config()
         self.game_location = config["game_location"]
         self.finish_location = config["finish_location"]
         self.score_location = config['score_location']
 
+        self.game_over_template = cv2.imread("game_over_template.png", cv2.IMREAD_GRAYSCALE)
         print("Enviroment Created...")
 
     def _capture(self, region: dict) -> np.ndarray:
@@ -150,26 +151,14 @@ class DinoEnv(gym.Env):
     
     ## check for game over
     def is_done(self) -> bool:
-        """checking for a game over on display using pytesseract text analysis"""
-        ## capture screen sub-region
-        screen = self._capture(self.finish_location)
+       screen = self._capture(self.finish_location)
 
-        # Preprocess for OCR: Apply adaptive thresholding to convert to binary black & white
-        processed = cv2.threshold(screen, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
-        
-        # Setup Tesseract Config 
-        custom_config = r'--psm 6'
-        text = pytesseract.image_to_string(processed, config=custom_config).strip().upper()
 
-        # Debug  
-        #print(f"Detected Finish Region Text: '{text}'")
+       template = cv2.resize(self.game_over_template, (screen.shape[1], screen.shape[0])) #type: ignore
 
-        # Fallback check
-        if "GAME" in text or "OVER" in text:
-            print("Game-Over!")
-            return True # true if game is done
-        
-        return False # game not done
+       diff = cv2.absdiff(screen, template)
+       match_ratio = np.mean(diff < 15)
+       return True if match_ratio > 0.95 else False
     
     ## restart enviroment from start
     def reset(self, seed=None, options=None): #type: ignore
@@ -207,9 +196,7 @@ class DinoEnv(gym.Env):
         # Extract only numeric digits to filter out random punctuation artifacts
         score_digits = "".join([char for char in raw_text if char.isdigit()])
         
-        if score_digits:
-            return int(score_digits)
-        return 0
+        return int(score_digits) if score_digits else None
         
 
 def main():

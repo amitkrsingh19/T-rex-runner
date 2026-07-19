@@ -1,5 +1,6 @@
 import time
 import json 
+from collections import deque
 
 import cv2
 import numpy as np
@@ -50,12 +51,14 @@ class GameControl:
                 canvas = self.driver.find_element(By.CLASS_NAME, "runner-canvas")
                 if canvas.is_displayed():
                     print("Game is ready.")
+                    print("---" *20)
                     break
             except:
                 pass
 
     ## start game at once    
     def start_game(self):
+        print("---"*20)
         print("Starting game...")
 
         self.open_dino_game()
@@ -73,12 +76,14 @@ class DinoEnv(gym.Env):
     def __init__(self):
         ## call super to get access to all the available methods of Env Class
         super().__init__()
-
+        print("Initialized Game Enviroment...")
         ## create observation_space - game enviroment box
         self.observation_space = Box(low=0, high=255, shape=(1,83,100), dtype=np.uint8)
         ## create action space of all actions that can be executed in enviroment
         self.action_space = Discrete(3) ## actions - (jump, duck, do-nothing)
 
+        self.frames = deque(maxlen= 4) ## 4 frames at a time
+        self.sct = MSS()
         config = self.load_config()
 
         self.game_location = config["game_location"]
@@ -89,8 +94,7 @@ class DinoEnv(gym.Env):
 
     def _capture(self, region: dict) -> np.ndarray:
         """Capture a screen region and return grayscale image."""
-        with MSS() as sct:
-            frame = np.array(sct.grab(region))[:, :, :3]
+        frame = np.array(self.sct.grab(region))[:, :, :3]
 
         return cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
@@ -108,11 +112,16 @@ class DinoEnv(gym.Env):
 
         # Resize
         resized = cv2.resize(gray, (100, 83))
+        self.last_frame = resized
+        ## append after resizing img to frames
+        self.frames.append(resized)
+        while len(self.frames) < 4:
+            self.frames.append(resized)
 
         # Add channel dimension
-        observation = resized[np.newaxis, :, :]
-        
-        return observation
+        #observation = resized[np.newaxis, :, :]
+
+        return np.stack(self.frames, axis=0)
     
     ## model will take a step on an action taken 
     def step(self, action):
@@ -149,7 +158,7 @@ class DinoEnv(gym.Env):
         processed = cv2.threshold(screen, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
         
         # Setup Tesseract Config 
-        custom_config = r'--psm 7'
+        custom_config = r'--psm 6'
         text = pytesseract.image_to_string(processed, config=custom_config).strip().upper()
 
         # Debug  
@@ -164,8 +173,10 @@ class DinoEnv(gym.Env):
     
     ## restart enviroment from start
     def reset(self, seed=None, options=None): #type: ignore
+        time.sleep(0.5)
         super().reset(seed=seed)
         ## restart the game
+        pydirectinput.click(x=150, y=150)
         pydirectinput.press("space")
         time.sleep(0.5)
 
@@ -175,11 +186,7 @@ class DinoEnv(gym.Env):
     
     # visualize the game
     def render(self):
-        obs_frame = self.get_observation()[0]
-
-        large_view = cv2.resize(obs_frame[0], (600, 498), interpolation=cv2.INTER_NEAREST)
-
-        cv2.imshow("Game", large_view)
+        cv2.imshow("Game", self.last_frame)
         cv2.waitKey(1)
 
     def close(self):
@@ -212,14 +219,15 @@ def main():
     
     env = DinoEnv()
 
-    obs, info = env.reset()
-    
-    frame_count = 0
+    #obs, info = env.reset()
 
-    for episode in range(5):
-        print(f"--- Starting Testing Episode {episode + 1} ---")
+    for episode in range(10):
+        print()
+        print(f"Starting Episode {episode + 1}")
+        print("---" * 20)
         obs, info = env.reset()
         done = False
+        total_reward = 0
 
         while not done:
             env.render()
@@ -228,10 +236,13 @@ def main():
 
             obs, reward, terminated, truncated, info = env.step(action)
 
+            total_reward += reward
             done = terminated or truncated
 
             if done:
-                print(f"Finished Episode! Performance Metrics Data: {info}")
+                print(f"Finished Episode with {info}")
+                print(f"Total Reward for this Episode is {total_reward}")
+                print("---" * 20)
     
     env.close()
 if __name__ == "__main__":

@@ -1,4 +1,0 @@
-RUN = 0
-JUMP = 1
-
-ACTION_NAMES = {RUN: "RUN", JUMP : "JUMP"}

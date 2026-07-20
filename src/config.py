@@ -4,7 +4,7 @@ IMAGE_HEIGHT = 84
 IMAGE_WIDTH = 84
 FRAME_STACK = 4
 
-NUM_ACTIONS = 2
+NUM_ACTIONS = 3
 
 """Training ke waqt set krna"""
 

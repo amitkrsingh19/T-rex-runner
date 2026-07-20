@@ -1,12 +1,11 @@
 import tensorflow as tf
 from tensorflow.keras import layers, models
-from config import STATE_SHAPE, NUM_ACTIONS, LEARNING_RATE
 
 class DQNModel :
     def __init__(self, input_shape, num_actions, learning_rate):
-        self.input_shape = STATE_SHAPE
-        self.num_actions  = NUM_ACTIONS
-        self.learning_rate = LEARNING_RATE
+        self.input_shape = input_shape
+        self.num_actions  = num_actions
+        self.learning_rate = learning_rate
 
         self.model = self.build_model()
 

@@ -1,20 +1,26 @@
 {
+    "active_capture_box": {
+        "left": 0,
+        "top": 350,
+        "width": 1300,
+        "height": 450
+    },
     "game_location": {
         "left": 0,
-        "top": 300,
-        "width": 600,
-        "height": 500
+        "top": 0,
+        "width": 500,
+        "height": 450
     },
     "finish_location": {
-        "left": 650,
-        "top": 480,
-        "width": 660,
-        "height": 70
+        "left": 630,
+        "top": 100,
+        "width": 670,
+        "height": 100
     },
     "score_location": {
-        "left": 1700, 
-        "top": 380, 
+        "left": 1680, 
+        "top": 360, 
         "width": 200, 
-        "height": 50
+        "height": 70
     }
 }

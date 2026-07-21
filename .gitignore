@@ -15,3 +15,5 @@ wheels/
 # outputs
 *.jpg
 *.txt
+
+checkpoints/

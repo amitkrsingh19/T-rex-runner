@@ -27,7 +27,7 @@ class DinoEnv(gym.Env):
         self.frame_stack_size = 4
 
         ## create observation_space - game enviroment box
-        self.observation_space = Box(low=0, high=255, shape=(4,83,100), dtype=np.uint8)
+        self.observation_space = Box(low=0, high=255, shape=(self.obs_height, self.obs_width, self.frame_stack_size), dtype=np.uint8)
         ## create action space of all actions that can be executed in enviroment
         self.action_space = Discrete(3) ## actions - (jump, duck, do-nothing)
 
@@ -91,16 +91,19 @@ class DinoEnv(gym.Env):
         
     ## get the screen which lies inside game region
     def get_observation(self, full_gray: np.ndarray= None ): #type: ignore
-        gray = self._slice_region(full_gray, self.game_location) 
-        # Resize
-        resized = cv2.resize(gray, (100, 83))
+
+        if full_gray is not None:
+            gray = self._slice_region(full_gray, self.game_location) 
+            # Resize
+            resized = cv2.resize(gray, (self.obs_width, self.obs_height))
+        else:
+            resized = np.zeros((self.obs_height, self.obs_width), dtype = np.uint8)
         self.last_frame = resized
 
         ## append after resizing img to frames
-        self.frames.append(resized)
 
         if len(self.frames) == 0:
-            while len(self.frames) < 4:
+            for _ in range(self.frame_stack_size): 
                 self.frames.append(resized)
         else:
             self.frames.append(resized)
@@ -108,7 +111,7 @@ class DinoEnv(gym.Env):
         # Add channel dimension
         #observation = resized[np.newaxis, :, :]
 
-        return np.stack(self.frames, axis=0)
+        return np.stack(self.frames, axis=-1) ## output shape (83,100,5)
     
     ## model will take a step on an action taken 
     def step(self, action):

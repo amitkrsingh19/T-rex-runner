@@ -8,7 +8,7 @@
     "game_location": {
         "left": 0,
         "top": 0,
-        "width": 500,
+        "width": 450,
         "height": 450
     },
     "finish_location": {
@@ -18,9 +18,9 @@
         "height": 100
     },
     "score_location": {
-        "left": 1680, 
+        "left": 1700, 
         "top": 360, 
         "width": 200, 
-        "height": 70
+        "height": 80
     }
 }

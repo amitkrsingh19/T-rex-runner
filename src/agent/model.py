@@ -16,7 +16,13 @@ class DQNModel :
             model.add(layers.Conv2D(filters = 64, kernel_size = (3, 3), strides=(1, 1), activation='relu'))
             model.add(layers.Flatten())
             model.add(layers.Dense(512, activation='relu'))
-            model.add(layers.Dense(self.num_actions, activation='linear'))
-            model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=self.learning_rate), loss='mse')
+            if hasattr(self.num_actions, 'n'):
+                clean_units = int(self.num_actions.n)
+            else:
+                clean_units = int(self.num_actions)
+            
+            model.add(layers.Dense(clean_units, activation='linear'))
+
+            self.optimizer = tf.keras.optimizers.Adam(learning_rate=self.learning_rate)
 
             return model   

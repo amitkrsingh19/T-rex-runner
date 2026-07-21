@@ -1,8 +1,8 @@
 import random
 import numpy as np
 import tensorflow as tf
-from model import DQNModel
-from memory import ReplayMemory
+from agent.model import DQNModel
+from agent.replay_buffer import ReplayMemory
 from config import STATE_SHAPE, NUM_ACTIONS, LEARNING_RATE, GAMMA, BATCH_SIZE, REPLAY_BUFFER_SIZE, EPSILON_START, EPSILON_MIN, EPSILON_DECAY, TARGET_UPDATE_FREQUENCY
 
 
@@ -43,17 +43,41 @@ class DQNAgent:
         if random.random() < self.epsilon:
             return random.randrange(self.num_actions)
         
-        state = np.expand_dims(state, axis=0)
+        state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)
+        state_tensor = tf.expand_dims(state_tensor, axis=0)
         
-        q_values = self.q_network.model.predict(state, verbose=0)
+        q_values = self.q_network.model(state_tensor, verbose=0)
 
-        return np.argmax(q_values[0])
+        return np.argmax(q_values.numpy()[0])
     
     def remember(self, state, action, reward, next_state, done):
         self.memory.push(state, action, reward, next_state, done)
 
     def update_target_network(self):
         self.target_network.model.set_weights(self.q_network.model.get_weights())
+
+    @tf.function
+    def _train_step(self, states, actions, rewards, next_states, dones):
+        dones = tf.cast(dones, tf.float32)
+        rewards = tf.cast(rewards, tf.float32)
+        
+        next_q_values = self.target_network.model(next_states, training= False)
+        max_next_q = tf.reduce_max(next_q_values, axis =1)
+
+        targets = rewards + (1.0 - dones) * self.gamma * max_next_q
+
+        with tf.GradientTape() as tape:
+            current_q_values = self.q_network.model(states, training=True)
+            
+            action_masks = tf.one_hot(actions, self.num_actions)
+            predicted_q_values = tf.reduce_sum(current_q_values * action_masks, axis=1)
+            
+            ## Mean Squared Error Loss
+            loss = tf.keras.losses.MSE(targets, predicted_q_values)
+
+        gradients = tape.gradient(loss, self.q_network.model.trainable_variables)
+        self.q_network.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
+
 
     def train(self):
         if len(self.memory) < self.batch_size:
@@ -69,20 +93,7 @@ class DQNAgent:
         rewards = np.array(rewards)
         dones = np.array(dones)
 
-        current_q_values = self.q_network.model.predict(states, verbose=0)
-        next_q_values = self.target_network.model.predict(next_states, verbose=0)
-
-        target_q_values = current_q_values.copy()
-
-        for i in range(self.batch_size):
-            if dones[i]:
-                target = rewards[i]
-            else:
-                target = rewards[i] + self.gamma * np.max(next_q_values[i])
-            
-            target_q_values[i][actions[i]] = target
-
-        self.q_network.model.fit(states, target_q_values, epochs=1, verbose=0)
+        self._train_step(states, actions, rewards, next_states, dones)
 
         self.training_steps += 1
 

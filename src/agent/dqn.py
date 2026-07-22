@@ -5,22 +5,58 @@ from agent.model import DQNModel
 from agent.replay_buffer import ReplayMemory
 from config import STATE_SHAPE, NUM_ACTIONS, LEARNING_RATE, GAMMA, BATCH_SIZE, REPLAY_BUFFER_SIZE, EPSILON_START, EPSILON_MIN, EPSILON_DECAY, TARGET_UPDATE_FREQUENCY
 
+class BaseAgent:
+    def __init__(self, policy_network, target_network):
+        self.epsilon = EPSILON_START
+        self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
+        self.num_actions = NUM_ACTIONS
 
-class DQNAgent:
-    def __init__(self, state_shape=STATE_SHAPE, num_actions=NUM_ACTIONS):
-        self.state_shape = state_shape
+        self.policy_network = policy_network
+        self.target_network = target_network
+
+        self.update_target_network()
+
+    def act(self, state):
+        if random.random() < self.epsilon:
+            return random.randrange(self.num_actions)
+        
+        state_tensor = tf.convert_to_tensor(state, dtype=tf.float32) / 255.0  ## shape (83, 100, 4)
+        state_tensor = tf.expand_dims(state_tensor, axis=0)     ## shape (1, 83, 100, 4)
+        
+        q_values = self.policy_network.model(state_tensor, training=False)
+
+        return int(np.argmax(q_values.numpy()[0]))
+
+    def remember(self, state, action, reward, next_state, done):
+        self.memory.push(state, action, reward, next_state, done)
+
+    def decay_epsilon(self):
+        self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
+
+    def save_model(self, path):
+        self.policy_network.model.save(path)
+
+    def load_model(self, path):
+        self.policy_network.model = tf.keras.models.load_model(path)
+
+        self.update_target_network()
+
+    def update_target_network(self):
+        self.target_network.model.set_weights(self.policy_network.model.get_weights())
+
+class DQNAgent(BaseAgent):
+    def __init__(self, num_actions, gamma=0.99, lr=1e-4):
+        self.state_shape = STATE_SHAPE
+
         self.num_actions = num_actions
-
         self.gamma = GAMMA
 
-        self.epsilon = EPSILON_START
         self.epsilon_min = EPSILON_MIN
         self.epsilon_decay = EPSILON_DECAY
 
-        self.batch_size = BATCH_SIZE
+        self.optimizer = tf.keras.optimizers.Adam(learning_rate = lr)
 
         self.target_update_frequency = TARGET_UPDATE_FREQUENCY
-
         self.training_steps = 0
 
         self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
@@ -35,31 +71,17 @@ class DQNAgent:
             input_shape = self.state_shape,
             num_actions = self.num_actions,
             learning_rate = LEARNING_RATE
-        )
+        ) 
 
-        self.update_target_network()
-
-    def select_action(self, state):
-        if random.random() < self.epsilon:
-            return random.randrange(self.num_actions)
-        
-        state_tensor = tf.convert_to_tensor(state, dtype=tf.float32)
-        state_tensor = tf.expand_dims(state_tensor, axis=0)
-        
-        q_values = self.q_network.model(state_tensor, verbose=0)
-
-        return np.argmax(q_values.numpy()[0])
-    
-    def remember(self, state, action, reward, next_state, done):
-        self.memory.push(state, action, reward, next_state, done)
-
-    def update_target_network(self):
-        self.target_network.model.set_weights(self.q_network.model.get_weights())
+        super().__init__(self.q_network, self.target_network)      
 
     @tf.function
     def _train_step(self, states, actions, rewards, next_states, dones):
         dones = tf.cast(dones, tf.float32)
         rewards = tf.cast(rewards, tf.float32)
+
+        states = states / 255.0
+        next_states = next_states / 255.0
         
         next_q_values = self.target_network.model(next_states, training= False)
         max_next_q = tf.reduce_max(next_q_values, axis =1)
@@ -71,45 +93,34 @@ class DQNAgent:
             
             action_masks = tf.one_hot(actions, self.num_actions)
             predicted_q_values = tf.reduce_sum(current_q_values * action_masks, axis=1)
-            
+
+            ## DEBUG
+            #tf.print("target range:", tf.reduce_min(targets), tf.reduce_max(targets))
+            #tf.print("predicted_q range:", tf.reduce_min(predicted_q_values), tf.reduce_max(predicted_q_values))
+
             ## Mean Squared Error Loss
             loss = tf.keras.losses.MSE(targets, predicted_q_values)
+            mean_loss = tf.reduce_mean(loss)
 
         gradients = tape.gradient(loss, self.q_network.model.trainable_variables)
-        self.q_network.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
+        gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
+        self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
 
+        return mean_loss
 
-    def train(self):
-        if len(self.memory) < self.batch_size:
-            return
-        
-        batch = self.memory.sample(self.batch_size)
+    def train(self, batch_size = 4):
+        if len(self.memory) < batch_size:
+            return None
 
-        states, actions, rewards, next_states, dones = zip(*batch)
+        states, actions, rewards, next_states, dones = self.memory.sample(batch_size)
 
-        states = np.array(states)
-        next_states = np.array(next_states)
-        actions = np.array(actions)
-        rewards = np.array(rewards)
-        dones = np.array(dones)
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
 
-        self._train_step(states, actions, rewards, next_states, dones)
+        loss_tensor = self._train_step(states, actions, rewards, next_states, dones)
 
-        self.training_steps += 1
+        loss = loss_tensor.numpy()
 
-        if self.training_steps % self.target_update_frequency == 0 :
-            self.update_target_network()
-
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
-            self.epsilon = max(self.epsilon, self.epsilon_min)    
-                
-
-    
-    def save_model(self, path):
-        self.q_network.model.save(path)
-
-    def load_model(self, path):
-        self.q_network.model = tf.keras.models.load_model(path)
-
-        self.update_target_network()
+        return float(loss)        

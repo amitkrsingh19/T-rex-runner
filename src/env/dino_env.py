@@ -102,16 +102,15 @@ class DinoEnv(gym.Env):
 
         ## append after resizing img to frames
 
-        if len(self.frames) == 0:
-            for _ in range(self.frame_stack_size): 
-                self.frames.append(resized)
-        else:
+        self.frames.append(resized)
+        while len(self.frames) < 4:
             self.frames.append(resized)
 
         # Add channel dimension
         #observation = resized[np.newaxis, :, :]
 
-        return np.stack(self.frames, axis=-1) ## output shape (83,100,5)
+        #return np.stack(self.frames, axis=0) ## output shape (4,83,100)
+        return np.stack(self.frames, axis=-1) ## OUTPUT SHape (83,100,4)
     
     ## model will take a step on an action taken 
     def step(self, action):
@@ -142,7 +141,7 @@ class DinoEnv(gym.Env):
             terminated = self.is_done(full_gray)
         t4 = time.time()
 
-        reward = -10 if terminated else 1
+        reward = -1 if terminated else 1
         truncated = False
         info = {}
 

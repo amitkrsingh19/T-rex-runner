@@ -1,5 +1,6 @@
 from collections import deque
 import random
+import numpy as np
 
 class ReplayMemory:
     def __init__(self, capacity):
@@ -9,10 +10,13 @@ class ReplayMemory:
         self.memory.append((state, action, reward, next_state, done))
 
     def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-    
-    def clear(self):
-        self.memory.clear()
+        batch = random.sample(self.memory, batch_size)
+        states, actions, rewards, next_states, dones = zip(*batch)
+
+        return (
+            np.array(states), np.array(actions), np.array(rewards, dtype=np.float32),
+            np.array(next_states), np.array(dones) 
+        )
 
     def __len__(self):
         return len(self.memory)

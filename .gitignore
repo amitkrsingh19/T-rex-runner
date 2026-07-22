@@ -12,6 +12,10 @@ wheels/
 #vscode 
 .vscode/
 
+# logs
+logs/
+tensorboard_logs/
+
 # outputs
 *.jpg
 *.txt

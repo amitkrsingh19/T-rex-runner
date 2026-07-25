@@ -17,7 +17,10 @@ class BaseAgent:
         self.update_target_network()
 
     def act(self, state):
+        training_phase_1 = True
         if random.random() < self.epsilon:
+            if training_phase_1:
+                return random.choice([0,1])
             return random.randrange(self.num_actions)
         
         state_tensor = tf.convert_to_tensor(state, dtype=tf.float32) / 255.0  ## shape (83, 100, 4)
@@ -25,6 +28,10 @@ class BaseAgent:
         
         q_values = self.policy_network.model(state_tensor, training=False)
 
+        ## DEBUG
+        #print(f"Q_VALUES: {q_values}, type : {type(q_values)}")
+        #print(f"in numpy: {q_values.numpy()}, {q_values.numpy()[0]}")
+            
         return int(np.argmax(q_values.numpy()[0]))
 
     def remember(self, state, action, reward, next_state, done):
@@ -95,6 +102,7 @@ class DQNAgent(BaseAgent):
             predicted_q_values = tf.reduce_sum(current_q_values * action_masks, axis=1)
 
             ## DEBUG
+            #tf.print("action", actions, "action_mask", action_masks )
             #tf.print("target range:", tf.reduce_min(targets), tf.reduce_max(targets))
             #tf.print("predicted_q range:", tf.reduce_min(predicted_q_values), tf.reduce_max(predicted_q_values))
 
@@ -102,7 +110,7 @@ class DQNAgent(BaseAgent):
             loss = tf.keras.losses.MSE(targets, predicted_q_values)
             mean_loss = tf.reduce_mean(loss)
 
-        gradients = tape.gradient(loss, self.q_network.model.trainable_variables)
+        gradients = tape.gradient(mean_loss, self.q_network.model.trainable_variables)
         gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
         self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
 

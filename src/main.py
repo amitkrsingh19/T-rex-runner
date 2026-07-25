@@ -1,10 +1,12 @@
 import csv
+import traceback
 
 from env.dino_env import DinoEnv
 from env.game_setup import GameControl
 from agent.dqn import DQNAgent
 
 import statistics
+import tensorflow as tf
 
 
 # ANSI Color Constants
@@ -16,6 +18,8 @@ CYAN = "\033[36m"
 RESET = "\033[0m"
 
 def main():
+    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+    print("GPU Name: ", tf.config.list_physical_devices('GPU'))
 
     game = GameControl()
     game.start_game()
@@ -27,8 +31,8 @@ def main():
 
     agent = DQNAgent(num_actions=num_actions)
 
-    num_episodes = 500
-    save_checkpoint_frequency = 50
+    num_episodes = 2000
+    save_checkpoint_frequency = 100
     
 #    print("\n" + f"{GREEN}={RESET}"*45)
 #    print(f"{RED}  Starting DQN Training on Chrome Dino Game{RESET}")
@@ -38,6 +42,7 @@ def main():
         csv.writer(f).writerow(["episode", "reward", "score", "steps", "epsilon", "avg_loss"])
 
     for episode in range(num_episodes):
+        #env.render()
 
         state, info = env.reset()
         done = False
@@ -54,7 +59,7 @@ def main():
                 agent.remember(state, action, reward, next_state, done)
 
                 loss = agent.train()
-                if loss:
+                if loss is not None:
                     total_loss.append(loss)
 
                 agent.decay_epsilon()
@@ -76,6 +81,7 @@ def main():
         # Periodic model tracking save sequences
             except Exception as e:
                 print(f"[ERROR] Episode {episode + 1} crashed : {e}")
+                traceback.print_exc()
                 done = True
 
         avg_loss = statistics.mean(total_loss) if total_loss else 0.0
@@ -89,11 +95,60 @@ def main():
         if (episode + 1) % save_checkpoint_frequency == 0:
             model_save_path = f"checkpoints/dino_dqn_ep{episode + 1}.keras"
             agent.save_model(model_save_path)
-            print(f"{RED}[SAVED]{BLUE} Saved target model to {model_save_path}\n{RESET}")
+            #print(f"{RED}[SAVED]{BLUE} Saved target model to {model_save_path}\n{RESET}")
 
-        print(f"{RED}Episode {YELLOW}{episode}   {GREEN}reward {YELLOW}{total_reward}   {BLUE}epsilon {YELLOW}{agent.epsilon:.3f} {CYAN}lOSS  {YELLOW}{avg_loss:.4f}{RESET}")
+        #print(f"{RED}Episode {YELLOW}{episode}   {GREEN}reward {YELLOW}{total_reward}   {BLUE}epsilon {YELLOW}{agent.epsilon:.3f} {CYAN}lOSS  {YELLOW}{avg_loss:.4f}{RESET}")
 
     env.close()
+
+"""
+# --- CONFIGURATION ---
+# Replace this with the checkpoint closest to your 1536-step episode
+MODEL_PATH = "checkpoints/dino_dqn_ep1600.keras" 
+NUM_GAMES = 5
+
+def play():
+    print(f"Loading champion model from {MODEL_PATH}...")
+    model = tf.keras.models.load_model(MODEL_PATH)
+    print("Model loaded successfully!")
+
+    game = GameControl()
+    game.start_game()
+    
+    env = DinoEnv()
+
+    for episode in range(NUM_GAMES):
+        state, info = env.reset()
+        done = False
+        total_steps = 0
+        total_reward = 0
+
+        print(f"\n--- Starting Game {episode + 1} ---")
+        
+        while not done:
+            # 1. Prepare the state EXACTLY as we did in training
+            state_tensor = tf.convert_to_tensor(state, dtype=tf.float32) / 255.0
+            state_tensor = tf.expand_dims(state_tensor, axis=0) 
+            
+            # 2. Ask the model for the best action (No epsilon randomness here!)
+            q_values = model(state_tensor, training=False)
+            action = int(np.argmax(q_values.numpy()[0]))
+
+            # 3. Take the action in the game
+            state, reward, terminated, truncated, info = env.step(action)
+            
+            done = terminated or truncated
+            total_steps += 1
+            total_reward += reward
+            
+            # Optional: render the agent's vision
+            env.render()
+            
+        final_score = info.get('score', 0)
+        print(f"Game Over! Steps Survived: {total_steps} | Score: {final_score}")
+        time.sleep(1) # Pause so you can see the game over screen
+
+    env.close()"""
 
 if __name__ == "__main__":
     main()

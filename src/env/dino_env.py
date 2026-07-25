@@ -11,6 +11,7 @@ import pytesseract
 import gymnasium as gym
 from gymnasium.spaces import Box, Discrete
 
+
 ## Create a Enviroment for dino game by extenfing env Class
 class DinoEnv(gym.Env):
     """Gymnasium environment for Chrome Dino game."""
@@ -122,9 +123,9 @@ class DinoEnv(gym.Env):
                 pydirectinput.press('space')
 
             case 2:
-                pydirectinput.keyDown("down")
+                pydirectinput.keyDown("down", _pause = False)
                 time.sleep(0.05)
-                pydirectinput.keyUp("down")
+                pydirectinput.keyUp("down", _pause = False)
 
         t1 = time.time()
 
@@ -141,7 +142,7 @@ class DinoEnv(gym.Env):
             terminated = self.is_done(full_gray)
         t4 = time.time()
 
-        reward = -1 if terminated else 1
+        reward = -10 if terminated else 1
         truncated = False
         info = {}
 
@@ -158,10 +159,10 @@ class DinoEnv(gym.Env):
                 info['score'] = 0
 
         ## Maintain exact loop pacing constraints (FPS Cap)    
-        #elapsed_time = time.time() - step_start_time
-        #time_left_to_sleep = self.step_duration - elapsed_time
-        #if time_left_to_sleep > 0:
-        #    time.sleep(time_left_to_sleep)
+        elapsed_time = time.time() - step_start_time
+        time_left_to_sleep = self.step_duration - elapsed_time
+        if time_left_to_sleep > 0:
+            time.sleep(time_left_to_sleep)
 
         return obs, reward, terminated, truncated, info
     
@@ -185,7 +186,7 @@ class DinoEnv(gym.Env):
         self.frames.clear()
         ## restart the game
         pydirectinput.click(x=150, y=150)
-        pydirectinput.press("space")
+        pydirectinput.press("space", _pause = False)
         time.sleep(0.3)
 
         full_gray = self._capture_full()

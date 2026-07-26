@@ -1,4 +1,6 @@
 import csv
+import numpy as np
+import time
 import traceback
 
 from env.dino_env import DinoEnv
@@ -31,7 +33,9 @@ def main():
 
     agent = DQNAgent(num_actions=num_actions)
 
-    num_episodes = 2000
+    agent.policy_network.model.load_weights('checkpoints/best_model.keras')
+
+    num_episodes = 500
     save_checkpoint_frequency = 100
     
 #    print("\n" + f"{GREEN}={RESET}"*45)
@@ -87,7 +91,7 @@ def main():
         avg_loss = statistics.mean(total_loss) if total_loss else 0.0
 
         with open("logs/training_log.csv", "a", newline="") as f:
-            csv.writer(f).writerow([episode + 1, total_reward, info.get("score", 0), total_steps, agent.epsilon, avg_loss])
+            csv.writer(f).writerow([episode + 1, round(total_reward, 3), info.get("score", 0), total_steps, agent.epsilon, avg_loss])
 
         if (episode + 1) % save_checkpoint_frequency == 0:
             agent.update_target_network()
@@ -101,10 +105,10 @@ def main():
 
     env.close()
 
-"""
+
 # --- CONFIGURATION ---
 # Replace this with the checkpoint closest to your 1536-step episode
-MODEL_PATH = "checkpoints/dino_dqn_ep1600.keras" 
+MODEL_PATH = "checkpoints/best_model3.keras" 
 NUM_GAMES = 5
 
 def play():
@@ -148,7 +152,7 @@ def play():
         print(f"Game Over! Steps Survived: {total_steps} | Score: {final_score}")
         time.sleep(1) # Pause so you can see the game over screen
 
-    env.close()"""
+    env.close()
 
 if __name__ == "__main__":
-    main()
+    play()

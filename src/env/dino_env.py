@@ -23,12 +23,13 @@ class DinoEnv(gym.Env):
         super().__init__()
         print("Initialized Game Enviroment...")
         ## Enviroment shape
-        self.obs_height = 83
-        self.obs_width = 100
-        self.frame_stack_size = 4
+        self.gametime_reward = 0.1
+        self.jump_penalty = 0
+        self.gameover_penalty = -1
+        self.duck_penalty = -0.05
 
         ## create observation_space - game enviroment box
-        self.observation_space = Box(low=0, high=255, shape=(self.obs_height, self.obs_width, self.frame_stack_size), dtype=np.uint8)
+        self.observation_space = Box(low=0, high=255, shape=(150, 600, 3), dtype=np.uint8)
         ## create action space of all actions that can be executed in enviroment
         self.action_space = Discrete(3) ## actions - (jump, duck, do-nothing)
 
@@ -50,7 +51,7 @@ class DinoEnv(gym.Env):
         self.finish_location = config["finish_location"]
         self.score_location = config['score_location']
         
-        self.last_frame = np.zeros((self.obs_height, self.obs_width), dtype=np.uint8)
+        self.last_frame = self.observation_space.low
         
         ## load the game over template
         self.game_over_template = cv2.imread("assets/game_over_template.png", cv2.IMREAD_GRAYSCALE)
@@ -96,7 +97,7 @@ class DinoEnv(gym.Env):
         if full_gray is not None:
             gray = self._slice_region(full_gray, self.game_location) 
             # Resize
-            resized = cv2.resize(gray, (self.obs_width, self.obs_height))
+            resized = cv2.resize(gray, (100,83))
         else:
             resized = np.zeros((self.obs_height, self.obs_width), dtype = np.uint8)
         self.last_frame = resized
@@ -115,15 +116,17 @@ class DinoEnv(gym.Env):
     
     ## model will take a step on an action taken 
     def step(self, action):
+        reward = self.gametime_reward
         step_start_time = time.time()  ## Start the step timer
-
         t0 = time.time()
         match action:
             case 1:
                 pydirectinput.press('space')
+                reward = self.jump_penalty
 
             case 2:
                 pydirectinput.keyDown("down", _pause = False)
+                reward += self.duck_penalty
                 time.sleep(0.05)
                 pydirectinput.keyUp("down", _pause = False)
 
@@ -142,7 +145,6 @@ class DinoEnv(gym.Env):
             terminated = self.is_done(full_gray)
         t4 = time.time()
 
-        reward = -10 if terminated else 1
         truncated = False
         info = {}
 
@@ -152,6 +154,7 @@ class DinoEnv(gym.Env):
         ## if the game ended get score, write in info
         if terminated:
             try:
+                reward = self.gameover_penalty
                 score_frame = np.array(self.sct.grab(self.score_location))[:, :, :3]
                 gray_score = cv2.cvtColor(score_frame, cv2.COLOR_BGR2GRAY)
                 info['score'] = self.get_episode_score(gray_score)

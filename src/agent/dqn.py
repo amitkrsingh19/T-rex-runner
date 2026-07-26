@@ -19,8 +19,6 @@ class BaseAgent:
     def act(self, state):
         training_phase_1 = True
         if random.random() < self.epsilon:
-            if training_phase_1:
-                return random.choice([0,1])
             return random.randrange(self.num_actions)
         
         state_tensor = tf.convert_to_tensor(state, dtype=tf.float32) / 255.0  ## shape (83, 100, 4)
@@ -56,7 +54,7 @@ class DQNAgent(BaseAgent):
         self.state_shape = STATE_SHAPE
 
         self.num_actions = num_actions
-        self.gamma = GAMMA
+        self.gamma = gamma
 
         self.epsilon_min = EPSILON_MIN
         self.epsilon_decay = EPSILON_DECAY

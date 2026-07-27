@@ -164,6 +164,42 @@ class DoubleDQNAgent(BaseAgent):
 
         super()._init_(self.q_network, self.target_network)
 
-        
+    @tf.function
+    def _train_step(self,states,actions,rewards,next_states,dones):
+        dones = tf.cast(dones, tf.float32)
+        rewards = tf.cast(rewards, tf.float32)
 
-              
+        states = states / 255.0
+        next_states = next_states / 255.0
+
+        next_q_online = self.q_network.model(next_states, training=False)
+
+        best_actions = tf.argmax(next_q_online, axis=1, output_type = tf.int32)
+
+        next_q_target = self.target_network.model(next_states, training=False)
+
+        action_mask = tf.one_hot(best_actions, depth=self.num_actions)
+
+        selected_q = tf.reduce_sum(next_q_target * action_mask, axis=1)
+
+        targets = rewards + (1.0 - dones) * self.gamma * selected_q
+
+        with tf.GradientTape() as tape:
+            current_q = self.q_network.model(states, training=True)
+            current_mask = tf.one_hot(actions, depth=self.num_actions)
+
+            predicted_q = tf.reduce_sum(current_q * current_mask, axis=1)
+
+            loss = tf.keras.losses.MSE(targets, predicted_q)
+
+        gradients = tape.gradient(loss, self.q_network.model.trainable_variables)
+        gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
+
+        self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
+
+        return loss
+
+
+
+
+

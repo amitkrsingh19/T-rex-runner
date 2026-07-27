@@ -132,7 +132,7 @@ class DQNAgent(BaseAgent):
         return float(loss)        
 
 class DoubleDQNAgent(BaseAgent):
-    def _init_(self, num_actions, gamma=0.99, lr=1e-4):
+    def __init__(self, num_actions, gamma=0.99, lr=1e-4):
 
         self.state_shape = STATE_SHAPE
         self.num_actions = num_actions
@@ -162,7 +162,7 @@ class DoubleDQNAgent(BaseAgent):
             learning_rate=LEARNING_RATE
         )
 
-        super()._init_(self.q_network, self.target_network)
+        super().__init__(self.q_network, self.target_network)
 
     @tf.function
     def _train_step(self,states,actions,rewards,next_states,dones):
@@ -198,6 +198,25 @@ class DoubleDQNAgent(BaseAgent):
         self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
 
         return loss
+
+    def train(self, batch_size = 4):
+        if len(self.memory) < batch_size:
+          return None
+        
+
+        states, actions, rewards, next_states, dones = self.memory.sample(batch_size)
+
+        states = tf.convert_to_tensor(states, dtype=tf.float32)
+        next_states = tf.convert_to_tensor(next_states, dtype=tf.float32)
+        rewards = tf.convert_to_tensor(rewards, dtype=tf.float32)
+        dones = tf.convert_to_tensor(dones, dtype=tf.float32)
+
+        loss_tensor = self._train_step(states, actions, rewards, next_states, dones)
+
+        loss = loss_tensor.numpy()
+
+        return float(loss)
+
 
 
 

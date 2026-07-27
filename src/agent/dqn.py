@@ -130,3 +130,40 @@ class DQNAgent(BaseAgent):
         loss = loss_tensor.numpy()
 
         return float(loss)        
+
+class DoubleDQNAgent(BaseAgent):
+    def _init_(self, num_actions, gamma=0.99, lr=1e-4):
+
+        self.state_shape = STATE_SHAPE
+        self.num_actions = num_actions
+        self.gamma = gamma
+
+        self.epsilon_min = EPSILON_MIN
+        self.epsilon_decay = EPSILON_DECAY
+
+        self.optimizer = tf.keras.optimizers.Adam(
+            learning_rate=lr
+        )
+
+        self.target_update_frequency = TARGET_UPDATE_FREQUENCY
+        self.training_steps = 0
+
+        self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
+
+        self.q_network = DQNModel(
+            input_shape=self.state_shape,
+            num_actions=self.num_actions,
+            learning_rate=LEARNING_RATE
+        )
+
+        self.target_network = DQNModel(
+            input_shape=self.state_shape,
+            num_actions=self.num_actions,
+            learning_rate=LEARNING_RATE
+        )
+
+        super()._init_(self.q_network, self.target_network)
+
+        
+
+              

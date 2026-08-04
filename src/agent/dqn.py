@@ -6,10 +6,10 @@ from agent.replay_buffer import ReplayMemory
 from config import STATE_SHAPE, NUM_ACTIONS, LEARNING_RATE, GAMMA, BATCH_SIZE, REPLAY_BUFFER_SIZE, EPSILON_START, EPSILON_MIN, EPSILON_DECAY, TARGET_UPDATE_FREQUENCY
 
 class BaseAgent:
-    def __init__(self, policy_network, target_network):
+    def __init__(self, policy_network, target_network, num_actions):
         self.epsilon = EPSILON_START
         self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
-        self.num_actions = NUM_ACTIONS
+        self.num_actions = num_actions
 
         self.policy_network = policy_network
         self.target_network = target_network
@@ -217,7 +217,7 @@ class DoubleDQNAgent(BaseAgent):
 
         return float(loss)
 
-
+class DuelingDoubleDQNAgent(BaseAgent):
 
 
 

@@ -55,14 +55,14 @@ class DuelingDQNModel:
         x = layers.MaxPooling2D(pool_size = (2, 2))(x)
         x = layers.Flatten()(x)
         shared = layers.Dense(512, activation='relu')(x)
-        
+
         value = layers.Dense(256, activation = 'relu')(shared)
         value = layers.Dense(1, name='value')(value)
 
         advantage = layers.Dense(256, activation='relu')(shared)
         advantage = layers.Dense(self.num_actions, name='advantage')(advantage)
 
-        q_values = layers.Lambda(lambda x: x[0] + (x[1] - tf.reduce_mean(x[1], axis=1, keepdims=True)), names='Qvalues')([value, advantage])
+        q_values = layers.Lambda(lambda x: x[0] + (x[1] - tf.reduce_mean(x[1], axis=1, keepdims=True)), name='Qvalues')([value, advantage])
 
         model = models.Model(inputs = inputs, outputs = q_values, name='DuelingDQN')
 

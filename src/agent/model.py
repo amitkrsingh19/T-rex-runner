@@ -54,8 +54,8 @@ class DuelingDQNModel:
         x = layers.Conv2D(filters = 64, kernel_size = (3, 3), strides = (1, 1), padding='same', activation = 'relu')(x)
         x = layers.MaxPooling2D(pool_size = (2, 2))(x)
         x = layers.Flatten()(x)
-
         shared = layers.Dense(512, activation='relu')(x)
+        
         value = layers.Dense(256, activation = 'relu')(shared)
         value = layers.Dense(1, name='value')(value)
 

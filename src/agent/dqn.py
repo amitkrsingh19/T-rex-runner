@@ -275,14 +275,15 @@ class DuelingDoubleDQNAgent(BaseAgent):
             predicted_q_values = tf.reduce_sum(current_q_values*current_action_mask, axis=1)
 
             loss = tf.keras.losses.Huber(targets, predicted_q_values)
+            mean_loss = tf.reduce_mean(loss)
 
-            gradients = tape.gradient(loss, self.q_network.model.trainable_variables)
+        gradients = tape.gradient(mean_loss, self.q_network.model.trainable_variables)
 
-            gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
+        gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
 
-            self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
+        self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
 
-            return loss
+        return mean_loss
 
 
     def train(self, batch_size= BATCH_SIZE):
@@ -303,7 +304,7 @@ class DuelingDoubleDQNAgent(BaseAgent):
 
         self.training_steps +=1
 
-        if(self.training_steps % self.training_update_frequency == 0):
+        if(self.training_steps % self.target_update_frequency == 0):
             self.update_target_network()
 
         return float(loss.numpy())

@@ -56,6 +56,9 @@ class GameControl:
         self.open_dino_game()
         self.wait_for_game_ready()
 
+        time.sleep(0.5)
+        pydirectinput.click(x=150, y=150) 
+        time.sleep(0.2)
         pydirectinput.press('space')
-        time.sleep(1)
+        time.sleep(0.5)
          

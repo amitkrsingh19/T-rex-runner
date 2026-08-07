@@ -18,18 +18,22 @@ class DinoEnv(gym.Env):
 
     ACTIONS = {0: "noop", 1: "jump", 2: "duck"}
     
-    def __init__(self):
+    def __init__(self, render_mode = None):
         ## call super to get access to all the available methods of Env Class
         super().__init__()
         print("Initialized Game Enviroment...")
+        self.render_mode = render_mode
+
         ## Enviroment shape
         self.gametime_reward = 0.1
-        self.jump_penalty = 0
-        self.gameover_penalty = -1
-        self.duck_penalty = -0.05
+        self.jump_penalty = 0.0
+        self.gameover_penalty = -10
+        self.duck_penalty = 0.0
+
+        self.prev_frame = None  # For motion detection
 
         ## create observation_space - game enviroment box
-        self.observation_space = Box(low=0, high=255, shape=(150, 600, 3), dtype=np.uint8)
+        self.observation_space = Box(low=0, high=255, shape=(83, 100, 4), dtype=np.uint8)
         ## create action space of all actions that can be executed in enviroment
         self.action_space = Discrete(3) ## actions - (jump, duck, do-nothing)
 
@@ -38,7 +42,7 @@ class DinoEnv(gym.Env):
 
         ## count on current_Step
         self.current_step = 0
-        self.min_steps_before_done_check = 5
+        self.min_steps_before_done_check = 10
 
         ## fps capture
         self.target_fps = 20  
@@ -51,7 +55,7 @@ class DinoEnv(gym.Env):
         self.finish_location = config["finish_location"]
         self.score_location = config['score_location']
         
-        self.last_frame = self.observation_space.low
+        self.last_frame = np.zeros((83, 100), dtype=np.uint8) 
         
         ## load the game over template
         self.game_over_template = cv2.imread("assets/game_over_template.png", cv2.IMREAD_GRAYSCALE)
@@ -64,7 +68,7 @@ class DinoEnv(gym.Env):
         top, left = region["top"], region["left"]
         height, width = region["height"], region["width"]
 
-        return full_gray[top:top + height, left:left + width]
+        return full_gray[top:top + height, left:left + width].copy()
     
     ## capture full tab screen
     def _capture_full(self) -> np.ndarray:
@@ -99,17 +103,23 @@ class DinoEnv(gym.Env):
             # Resize
             resized = cv2.resize(gray, (100,83))
         else:
-            resized = np.zeros((self.obs_height, self.obs_width), dtype = np.uint8)
+            resized = np.zeros((83, 100), dtype = np.uint8)
+
+        # Compute frame difference for motion
+        if self.prev_frame is not None:
+            diff = cv2.absdiff(resized, self.prev_frame)
+        else:
+            diff = np.zeros_like(resized)
+
+        self.prev_frame = resized.copy()
         self.last_frame = resized
 
         ## append after resizing img to frames
-
         self.frames.append(resized)
-        while len(self.frames) < 4:
-            self.frames.append(resized)
+        self.frames.append(diff)
 
-        # Add channel dimension
-        #observation = resized[np.newaxis, :, :]
+        while len(self.frames) < 4:
+            self.frames.append(resized if len(self.frames) % 2 == 0 else diff)
 
         #return np.stack(self.frames, axis=0) ## output shape (4,83,100)
         return np.stack(self.frames, axis=-1) ## OUTPUT SHape (83,100,4)
@@ -119,16 +129,17 @@ class DinoEnv(gym.Env):
         reward = self.gametime_reward
         step_start_time = time.time()  ## Start the step timer
         t0 = time.time()
+        self.last_action = action
         match action:
             case 1:
                 pydirectinput.press('space')
-                reward = self.jump_penalty
+                reward += self.jump_penalty
 
             case 2:
-                pydirectinput.keyDown("down", _pause = False)
+                pydirectinput.keyDown("down")
                 reward += self.duck_penalty
-                time.sleep(0.05)
-                pydirectinput.keyUp("down", _pause = False)
+                time.sleep(0.08)
+                pydirectinput.keyUp("down",_pause =False)
 
         t1 = time.time()
 
@@ -160,6 +171,8 @@ class DinoEnv(gym.Env):
                 info['score'] = self.get_episode_score(gray_score)
             except Exception:
                 info['score'] = 0
+        else:
+            info['score'] = 0
 
         ## Maintain exact loop pacing constraints (FPS Cap)    
         elapsed_time = time.time() - step_start_time
@@ -171,51 +184,80 @@ class DinoEnv(gym.Env):
     
     ## check for game over
     def is_done(self, full_gray: np.ndarray) -> bool:
-       """compares the finish region against a saved game over template"""
-       screen = self._slice_region(full_gray, self.finish_location)
+        """compares the finish region against a saved game over template"""
+        screen = self._slice_region(full_gray, self.finish_location)
 
-       template = cv2.resize(self.game_over_template, (screen.shape[1], screen.shape[0])) #type: ignore
+        template = cv2.resize(self.game_over_template, (screen.shape[1], screen.shape[0])) #type: ignore
        
 
-       diff = cv2.absdiff(screen, template)
-       match_ratio = np.mean(diff < 15)
-       return True if match_ratio > 0.95 else False
+        diff = cv2.absdiff(screen, template)
+        match_ratio = np.mean(diff < 15)
+
+        return True if match_ratio > 0.9 else False
     
     ## restart enviroment from start
-    def reset(self, seed=None, options=None): #type: ignore
-        super().reset(seed=seed)
-        time.sleep(0.5)
-        self.current_step = 0
-        self.frames.clear()
-        ## restart the game
-        pydirectinput.click(x=150, y=150)
-        pydirectinput.press("space", _pause = False)
-        time.sleep(0.3)
+    def reset(self, seed=None): #type: ignore
+        try:
 
-        full_gray = self._capture_full()
-        obs = self.get_observation(full_gray)
-        info = {}
-        return obs, info
-    
+            super().reset(seed=seed)
+            time.sleep(0.5)
+            self.current_step = 0
+            self.prev_frame = None
+            self.frames.clear()
+            self.last_score = 0
+
+            ## restart the game
+            pydirectinput.press('space') 
+            time.sleep(0.1)
+            pydirectinput.press("space")
+            time.sleep(0.3)
+
+            full_gray = self._capture_full()
+            obs = self.get_observation(full_gray)
+            info = {}
+            return obs, info
+        except Exception as e:
+            print(f"Error during reset: {e}")
+            ## Return blank observation as fallback
+            return np.zeros((83, 100, 4), dtype=np.uint8), {'error': str(e)}
+
     # visualize the game
     def render(self):
-        cv2.imshow("Game Observation Stream", self.last_frame)
-        cv2.waitKey(1)
+        if self.render_mode == "human":
+            cv2.imshow("Game Observation Stream", self.last_frame)
+            cv2.waitKey(1)
+        elif self.render_mode == "rgb_array":
+            return self.last_frame
 
     def close(self):
         cv2.destroyAllWindows()
 
+    def get_episode_info(self):
+        """Get diagnostic information about current episode"""
+        return {
+            'steps': self.current_step,
+            'frames_in_buffer': len(self.frames),
+            'last_action': self.last_action if hasattr(self, 'last_action') else None,
+            'fps': 1.0 / self.step_duration if self.step_duration > 0 else 0
+        }
     ## get each episodes score for logging 
-    def get_episode_score(self, pre_captured_gray: np.ndarray):
+    def get_episode_score(self, pre_captured_gray: np.ndarray) -> int:
         """Scrapes the high score digits directly from the canvas area"""
 
         processed = cv2.threshold(pre_captured_gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)[1]
+
+        ## remove all noise
+        kernel = np.ones((1, 1), np.uint8)
+        processed = cv2.morphologyEx(processed, cv2.MORPH_CLOSE, kernel)
 
         ## Setup Tesseract Digit Config
         custom_config = r'--psm 7 outputbase digits'
         raw_text = pytesseract.image_to_string(processed, config=custom_config).strip()
 
         ## Extract only numeric digits to filter out random punctuation artifacts
-        score_digits = "".join([char for char in raw_text if char.isdigit()])
+        score_digits = "".join(filter(str.isdigit, raw_text))
         
-        return int(score_digits) if score_digits else 0
+        try:
+            return int(score_digits) if score_digits else 0
+        except ValueError:
+            return 0

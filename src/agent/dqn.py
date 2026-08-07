@@ -53,7 +53,6 @@ class DQNAgent(BaseAgent):
     def __init__(self, num_actions, gamma=0.99, lr=1e-4):
         self.state_shape = STATE_SHAPE
 
-        self.num_actions = num_actions
         self.gamma = gamma
 
         self.epsilon_min = EPSILON_MIN
@@ -66,17 +65,17 @@ class DQNAgent(BaseAgent):
 
         self.q_network = DQNModel(
             input_shape = self.state_shape,
-            num_actions = self.num_actions,
+            num_actions = num_actions,
             learning_rate = LEARNING_RATE
         )
 
         self.target_network = DQNModel(
             input_shape = self.state_shape,
-            num_actions = self.num_actions,
+            num_actions = num_actions,
             learning_rate = LEARNING_RATE
         ) 
 
-        super().__init__(self.q_network, self.target_network, self.num_actions)      
+        super().__init__(self.q_network, self.target_network, num_actions)      
 
     @tf.function
     def _train_step(self, states, actions, rewards, next_states, dones):
@@ -133,7 +132,6 @@ class DoubleDQNAgent(BaseAgent):
     def __init__(self, num_actions, gamma=0.99, lr=1e-4):
 
         self.state_shape = STATE_SHAPE
-        self.num_actions = num_actions
         self.gamma = gamma
 
         self.epsilon_min = EPSILON_MIN
@@ -148,17 +146,17 @@ class DoubleDQNAgent(BaseAgent):
 
         self.q_network = DQNModel(
             input_shape=self.state_shape,
-            num_actions=self.num_actions,
+            num_actions= num_actions,
             learning_rate=LEARNING_RATE
         )
 
         self.target_network = DQNModel(
             input_shape=self.state_shape,
-            num_actions=self.num_actions,
+            num_actions= num_actions,
             learning_rate=LEARNING_RATE
         )
 
-        super().__init__(self.q_network, self.target_network, self.num_actions)
+        super().__init__(self.q_network, self.target_network, num_actions)
 
     @tf.function
     def _train_step(self,states,actions,rewards,next_states,dones):
@@ -217,7 +215,6 @@ class DoubleDQNAgent(BaseAgent):
 class DuelingDoubleDQNAgent(BaseAgent):
     def __init__(self, num_actions, gamma=0.99, lr=1e-4):
         self.state_shape = STATE_SHAPE
-        self.num_actions = num_actions
         self.gamma = gamma
 
         self.epsilon_min = EPSILON_MIN
@@ -230,18 +227,18 @@ class DuelingDoubleDQNAgent(BaseAgent):
 
         self.q_network = DuelingDQNModel(
             input_shape = self.state_shape,
-            num_actions = self.num_actions,
+            num_actions = num_actions,
             learning_rate = LEARNING_RATE
 
         )
 
         self.target_network = DuelingDQNModel(
             input_shape = self.state_shape,
-            num_actions = self.num_actions,
+            num_actions = num_actions,
             learning_rate = LEARNING_RATE
         )
 
-        super().__init__(self.q_network, self.target_network, self.num_actions)
+        super().__init__(self.q_network, self.target_network, num_actions)
 
     @tf.function
     def _train_step(self, states, actions, rewards, next_states, dones):

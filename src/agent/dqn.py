@@ -285,6 +285,30 @@ class DuelingDoubleDQNAgent(BaseAgent):
             return loss
 
 
+    def train(self, batch_size=BATCH_SIZE):
+        if len(self.memory) < batch_size:
+            return None
+
+        states, actions, rewards, next_states, dones = self.memory.sample(batch_size)
+
+        states = tf.convert_to_tensor(states, dtype= tf.float32)
+
+        next_states = tf.convert_to_tensor(next_states, dtype = tf.float32)
+
+        rewards = tf.convert_to_tensor(rewards, dtype = tf.float32)
+
+        dones = tf.convert_to_tensor(dones, dtype = tf.float32)
+
+        loss = self._train_step(states, actions, rewards, next_states, dones)
+
+        self.training_steps +=1
+
+        if(self.training_steps % self.training_update_frequency == 0):
+            self.update_target_network()
+
+        return float(loss.numpy())
+
+
     
 
 

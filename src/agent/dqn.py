@@ -17,7 +17,7 @@ class BaseAgent:
         self.update_target_network()
 
     def act(self, state):
-        training_phase_1 = True
+
         if random.random() < self.epsilon:
             return random.randrange(self.num_actions)
         
@@ -38,6 +38,9 @@ class BaseAgent:
     def decay_epsilon(self):
         self.epsilon = max(EPSILON_MIN, self.epsilon * EPSILON_DECAY)
 
+    def decay_epsilon_step(self):
+        self.epsilon = max(EPSILON_MIN, self.epsilon * 0.9999)  # Per-step decay    
+
     def save_model(self, path):
         self.policy_network.model.save(path)
 
@@ -50,23 +53,17 @@ class BaseAgent:
         self.target_network.model.set_weights(self.policy_network.model.get_weights())
 
 class DQNAgent(BaseAgent):
-    def __init__(self, num_actions, gamma=0.99, lr=1e-4):
+    def __init__(self, num_actions, model= None, gamma=GAMMA, lr=LEARNING_RATE):
         self.state_shape = STATE_SHAPE
-
         self.num_actions = num_actions
         self.gamma = gamma
-
-        self.epsilon_min = EPSILON_MIN
-        self.epsilon_decay = EPSILON_DECAY
 
         self.optimizer = tf.keras.optimizers.Adam(learning_rate = lr)
 
         self.target_update_frequency = TARGET_UPDATE_FREQUENCY
         self.training_steps = 0
 
-        self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
-
-        self.q_network = DQNModel(
+        self.q_network = model or DQNModel(
             input_shape = self.state_shape,
             num_actions = self.num_actions,
             learning_rate = LEARNING_RATE
@@ -109,12 +106,16 @@ class DQNAgent(BaseAgent):
             mean_loss = tf.reduce_mean(loss)
 
         gradients = tape.gradient(mean_loss, self.q_network.model.trainable_variables)
+
+        if any(g is None for g in gradients):
+            return mean_loss
+        
         gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
         self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
 
         return mean_loss
 
-    def train(self, batch_size = 4):
+    def train(self, batch_size = BATCH_SIZE):
         if len(self.memory) < batch_size:
             return None
 
@@ -127,6 +128,9 @@ class DQNAgent(BaseAgent):
 
         loss_tensor = self._train_step(states, actions, rewards, next_states, dones)
 
+        if loss_tensor is None:
+            return None
+        
         loss = loss_tensor.numpy()
 
         return float(loss)        

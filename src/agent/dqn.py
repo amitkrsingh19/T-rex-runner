@@ -64,8 +64,6 @@ class DQNAgent(BaseAgent):
         self.target_update_frequency = TARGET_UPDATE_FREQUENCY
         self.training_steps = 0
 
-        self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
-
         self.q_network = DQNModel(
             input_shape = self.state_shape,
             num_actions = self.num_actions,
@@ -148,8 +146,6 @@ class DoubleDQNAgent(BaseAgent):
         self.target_update_frequency = TARGET_UPDATE_FREQUENCY
         self.training_steps = 0
 
-        self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
-
         self.q_network = DQNModel(
             input_shape=self.state_shape,
             num_actions=self.num_actions,
@@ -191,13 +187,14 @@ class DoubleDQNAgent(BaseAgent):
             predicted_q = tf.reduce_sum(current_q * current_mask, axis=1)
 
             loss = tf.keras.losses.MSE(targets, predicted_q)
+            mean_loss = tf.reduce_mean(loss)
 
-        gradients = tape.gradient(loss, self.q_network.model.trainable_variables)
+        gradients = tape.gradient(mean_loss, self.q_network.model.trainable_variables)
         gradients, _ = tf.clip_by_global_norm(gradients, 10.0)
 
         self.optimizer.apply_gradients(zip(gradients, self.q_network.model.trainable_variables))
 
-        return loss
+        return mean_loss
 
     def train(self, batch_size = BATCH_SIZE):
         if len(self.memory) < batch_size:
@@ -230,8 +227,6 @@ class DuelingDoubleDQNAgent(BaseAgent):
 
         self.target_update_frequency = TARGET_UPDATE_FREQUENCY
         self.training_steps = 0
-
-        self.memory = ReplayMemory(REPLAY_BUFFER_SIZE)
 
         self.q_network = DuelingDQNModel(
             input_shape = self.state_shape,

@@ -1,158 +1,31 @@
-import csv
-import numpy as np
-import time
-import traceback
-
-from env.dino_env import DinoEnv
-from env.game_setup import GameControl
-from agent.dqn import DQNAgent
-
-import statistics
+import argparse
+from datetime import datetime
 import tensorflow as tf
+from training.train import train
+from training.evaluate import evaluate
 
-
-# ANSI Color Constants
-RED = "\033[31m"
-GREEN = "\033[32m"
-YELLOW = "\033[33m"
-BLUE = "\033[34m"
-CYAN = "\033[36m"
-RESET = "\033[0m"
 
 def main():
-    print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
-    print("GPU Name: ", tf.config.list_physical_devices('GPU'))
+    parser = argparse.ArgumentParser(description="Chrome Dino DQN")
+    parser.add_argument("--mode", choices=["train", "eval"], default="train")
+    parser.add_argument("--agent", choices=["dqn", "double_dqn", "dueling_dqn", "expected_sarsa"], default="dqn")
+    parser.add_argument("--episodes", type=int, default=500)
+    parser.add_argument("--resume", type=str, default=None, help="Path to checkpoint to resume from")
+    args = parser.parse_args()
 
-    game = GameControl()
-    game.start_game()
-    
-    env = DinoEnv()
+    if args.mode == "train":
+        run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        writer = tf.summary.create_file_writer(f"logs/{args.agent}_{run_id}")
+        train(
+            agent_type=args.agent,
+            episodes=args.episodes,
+            writer=writer,
+            resume_from=args.resume,
+        )
+        writer.close()
+    else:
+        evaluate(agent_type=args.agent)
 
-    #obs, info = env.reset()
-    num_actions = env.action_space.n
-
-    agent = DQNAgent(num_actions=num_actions)
-
-    agent.policy_network.model.load_weights('checkpoints/best_model.keras')
-
-    num_episodes = 500
-    save_checkpoint_frequency = 100
-    
-#    print("\n" + f"{GREEN}={RESET}"*45)
-#    print(f"{RED}  Starting DQN Training on Chrome Dino Game{RESET}")
-#    print(f"{GREEN}={RESET}"*45 + "\n")   
-
-    with open("logs/training_log.csv", "w", newline="") as f:
-        csv.writer(f).writerow(["episode", "reward", "score", "steps", "epsilon", "avg_loss"])
-
-    for episode in range(num_episodes):
-        #env.render()
-
-        state, info = env.reset()
-        done = False
-        total_reward = 0
-        total_steps = 0
-        total_loss = []
-
-        while not done:
-            try:
-                action = agent.act(state)
-                next_state, reward, terminated, truncated, info = env.step(action)
-                done = terminated or truncated
-
-                agent.remember(state, action, reward, next_state, done)
-
-                loss = agent.train()
-                if loss is not None:
-                    total_loss.append(loss)
-
-                agent.decay_epsilon()
-                
-                state = next_state
-                total_reward += reward
-                total_steps += 1
-
-#            if done:
-#                final_score = info.get('score', 0)#
-
-#                print(f"{BLUE} Episode:{YELLOW} {episode + 1}/{num_episodes}{RESET}")
-#                print(f"{BLUE} Steps Survived:{YELLOW} {episode_step_count}{RESET}")
-#                print(f"{BLUE} Final Game Score:{YELLOW} {final_score}{RESET}")
-#                print(f"{BLUE} Total Accrued Reward:{YELLOW} {total_reward}{RESET}")
-#                print(f"{BLUE} Current Exploration Epsilon:{YELLOW} {agent.epsilon:.4f}{RESET}")
-#                print("-" * 45)
-
-        # Periodic model tracking save sequences
-            except Exception as e:
-                print(f"[ERROR] Episode {episode + 1} crashed : {e}")
-                traceback.print_exc()
-                done = True
-
-        avg_loss = statistics.mean(total_loss) if total_loss else 0.0
-
-        with open("logs/training_log.csv", "a", newline="") as f:
-            csv.writer(f).writerow([episode + 1, round(total_reward, 3), info.get("score", 0), total_steps, agent.epsilon, avg_loss])
-
-        if (episode + 1) % save_checkpoint_frequency == 0:
-            agent.update_target_network()
-
-        if (episode + 1) % save_checkpoint_frequency == 0:
-            model_save_path = f"checkpoints/dino_dqn_ep{episode + 1}.keras"
-            agent.save_model(model_save_path)
-            #print(f"{RED}[SAVED]{BLUE} Saved target model to {model_save_path}\n{RESET}")
-
-        #print(f"{RED}Episode {YELLOW}{episode}   {GREEN}reward {YELLOW}{total_reward}   {BLUE}epsilon {YELLOW}{agent.epsilon:.3f} {CYAN}lOSS  {YELLOW}{avg_loss:.4f}{RESET}")
-
-    env.close()
-
-
-# --- CONFIGURATION ---
-# Replace this with the checkpoint closest to your 1536-step episode
-MODEL_PATH = "checkpoints/best_model3.keras" 
-NUM_GAMES = 5
-
-def play():
-    print(f"Loading champion model from {MODEL_PATH}...")
-    model = tf.keras.models.load_model(MODEL_PATH)
-    print("Model loaded successfully!")
-
-    game = GameControl()
-    game.start_game()
-    
-    env = DinoEnv()
-
-    for episode in range(NUM_GAMES):
-        state, info = env.reset()
-        done = False
-        total_steps = 0
-        total_reward = 0
-
-        print(f"\n--- Starting Game {episode + 1} ---")
-        
-        while not done:
-            # 1. Prepare the state EXACTLY as we did in training
-            state_tensor = tf.convert_to_tensor(state, dtype=tf.float32) / 255.0
-            state_tensor = tf.expand_dims(state_tensor, axis=0) 
-            
-            # 2. Ask the model for the best action (No epsilon randomness here!)
-            q_values = model(state_tensor, training=False)
-            action = int(np.argmax(q_values.numpy()[0]))
-
-            # 3. Take the action in the game
-            state, reward, terminated, truncated, info = env.step(action)
-            
-            done = terminated or truncated
-            total_steps += 1
-            total_reward += reward
-            
-            # Optional: render the agent's vision
-            env.render()
-            
-        final_score = info.get('score', 0)
-        print(f"Game Over! Steps Survived: {total_steps} | Score: {final_score}")
-        time.sleep(1) # Pause so you can see the game over screen
-
-    env.close()
 
 if __name__ == "__main__":
-    play()
+    main()

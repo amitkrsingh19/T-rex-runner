@@ -9,7 +9,7 @@ import tensorflow as tf
 
 from env.dino_env import DinoEnv
 from env.game_setup import GameControl
-from agent.dqn import DQNAgent
+from agent.dqn import DQNAgent, DoubleDQNAgent, DuelingDoubleDQNAgent
 from config import BATCH_SIZE
 
 
@@ -42,8 +42,8 @@ def train(agent_type="dqn", episodes=500, writer=None, resume_from=None):
     # Agent factory
     AGENTS = {
         "dqn": DQNAgent,
-        # "double_dqn": DoubleDQNAgent,
-        # "dueling_dqn": DuelingDQNAgent,
+         "double_dqn": DoubleDQNAgent,
+         "dueling_dqn": DuelingDoubleDQNAgent,
         # "expected_sarsa": ExpectedSARSAAgent,
     }
     agent_class = AGENTS.get(agent_type, DQNAgent)

@@ -78,7 +78,7 @@ class DQNAgent(BaseAgent):
             learning_rate = LEARNING_RATE
         ) 
 
-        super().__init__(self.q_network, self.target_network)      
+        super().__init__(self.q_network, self.target_network, self.num_actions)      
 
     @tf.function
     def _train_step(self, states, actions, rewards, next_states, dones):
@@ -114,7 +114,7 @@ class DQNAgent(BaseAgent):
 
         return mean_loss
 
-    def train(self, batch_size = 4):
+    def train(self, batch_size = BATCH_SIZE):
         if len(self.memory) < batch_size:
             return None
 
@@ -162,7 +162,7 @@ class DoubleDQNAgent(BaseAgent):
             learning_rate=LEARNING_RATE
         )
 
-        super().__init__(self.q_network, self.target_network)
+        super().__init__(self.q_network, self.target_network, self.num_actions)
 
     @tf.function
     def _train_step(self,states,actions,rewards,next_states,dones):
@@ -199,7 +199,7 @@ class DoubleDQNAgent(BaseAgent):
 
         return loss
 
-    def train(self, batch_size = 4):
+    def train(self, batch_size = BATCH_SIZE):
         if len(self.memory) < batch_size:
           return None
         
@@ -246,7 +246,7 @@ class DuelingDoubleDQNAgent(BaseAgent):
             learning_rate = LEARNING_RATE
         )
 
-        super().__init__(self.q_network, self.target_network)
+        super().__init__(self.q_network, self.target_network, self.num_actions)
 
     @tf.function
     def _train_step(self, states, actions, rewards, next_states, dones):
@@ -285,7 +285,7 @@ class DuelingDoubleDQNAgent(BaseAgent):
             return loss
 
 
-    def train(self, batch_size=BATCH_SIZE):
+    def train(self, batch_size= BATCH_SIZE):
         if len(self.memory) < batch_size:
             return None
 
